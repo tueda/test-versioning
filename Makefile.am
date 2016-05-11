@@ -11,6 +11,7 @@ version.h: update_version_h
 
 dist-hook:
 	$(DISTHOOK_VERSION_H)
+	$(DISTHOOK_VERSION)
 
 UPDATE_VERSION_H = \
 	if [ -f $(srcdir)/version.h.in ]; then \
