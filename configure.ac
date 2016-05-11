@@ -6,9 +6,9 @@ m4_ifndef([m4_chomp_all], [m4_define([m4_chomp_all], [m4_format([[%.*s]], m4_bre
 m4_define([my_version],
   m4_esyscmd_s([
     if test -f .version; then
-      cat .version;
+      cat .version
     else
-      scripts/git-version-gen.sh -C . -v;
+      scripts/git-version-gen.sh -C . -v
     fi
   ])dnl
 )
