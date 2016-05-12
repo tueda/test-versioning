@@ -70,7 +70,7 @@ if [ -n "$next" ]; then
 fi
 
 git_C() {
-  git -C "$refdir" "$@"
+  (cd "$refdir" && git "$@")
 }
 
 # Extract the version number from the latest tag, e.g.,
