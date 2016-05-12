@@ -20,6 +20,28 @@ Options:
 END
 }
 
+# Format the date given in the form of '%Y-%m-%d %H:%M:%S %z'.
+#   fmt_isodate <isodate> <format>
+fmt_isodate() {
+  # dash (0.5.5.1) needs the following exports.
+  export LANG
+  export TZ
+  # BSD date
+  date -j -f '%Y-%m-%d %H:%M:%S %z' "$1" +"$2" 2>/dev/null ||
+  # GNU date
+  date -d "$1" +"$2" 2>/dev/null ||
+  # perl Time::Piece
+  # XXX: It has problems on the time zone.
+  perl -MTime::Piece <<END 2>/dev/null ||
+    print Time::Piece->strptime('$1', '%Y-%m-%d %H:%M:%S %z')->strftime('$2')
+END
+  # Failed.
+  {
+    echo "$prog: error: failed to format datetime ($1)" >&2
+    false
+  }
+}
+
 refdir=$rootdir
 mode=raw
 output_file=
@@ -101,12 +123,13 @@ if [ "$mode" != "only-version" ]; then
   git_C update-index -q --refresh
   if git_C diff-index --quiet HEAD .; then
     # If the working tree is not dirty, use the latest commit date.
-    date=`LANG=C git_C log -1 --format=%cd --date=format:"$date_format" .`
+    isodate=`git_C log -1 --pretty=%ci .`
+    date=`LANG=C TZ=UTC fmt_isodate "$isodate" "$date_format"`
   else
     # If the working tree is dirty, suffix "-dirty" to the revision identifier
     # and use the current date time.
     revision="$revision-dirty"
-    date=`LANG=C date +"$date_format"`
+    date=`LANG=C TZ=UTC date +"$date_format"`
   fi
   # Extract MAJOR.MINOR.PATCH from the version number.
   major_version=`expr "$version_num" : '\([0-9]\+\)' || :`
