@@ -38,6 +38,7 @@ END
   # Failed.
   {
     echo "$prog: error: failed to format datetime ($1)" >&2
+    echo "$prog: info: GNU/BSD date not available?" >&2
     false
   }
 }
