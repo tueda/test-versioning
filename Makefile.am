@@ -13,23 +13,26 @@ dist-hook:
 	$(DISTHOOK_VERSION_H)
 	$(DISTHOOK_VERSION)
 
+if FIXED_VERSION
+
 UPDATE_VERSION_H = \
-	if [ -f $(srcdir)/version.h.in ]; then \
-		[ -f version.h ] || $(LN_S) $(srcdir)/version.h.in version.h; \
-	else \
-		$(SHELL) $(top_srcdir)/scripts/git-version-gen.sh -C "$(srcdir)" -c -o version.h; \
-	fi
+	[ -f version.h ] || $(LN_S) "$(srcdir)/version.h.in" version.h
 
 DISTHOOK_VERSION_H = \
-	if [ -f $(srcdir)/version.h.in ]; then \
-		cp $(srcdir)/version.h.in $(distdir)/version.h.in; \
-	else \
-		$(SHELL) $(top_srcdir)/scripts/git-version-gen.sh -C $(srcdir) -c -o $(distdir)/version.h.in; \
-	fi
+	cp "$(srcdir)/version.h.in" "$(distdir)/version.h.in"
 
 DISTHOOK_VERSION = \
-	if [ -f $(srcdir)/.version ]; then \
-		cp $(srcdir)/.version $(distdir)/.version; \
-	else \
-		$(SHELL) $(top_srcdir)/scripts/git-version-gen.sh -C $(srcdir) -v -o $(distdir)/.version; \
-	fi
+	cp "$(srcdir)/.version" "$(distdir)/.version"
+
+else
+
+UPDATE_VERSION_H = \
+	$(SHELL) "$(top_srcdir)/scripts/git-version-gen.sh" -C "$(srcdir)" -c -o version.h
+
+DISTHOOK_VERSION_H = \
+	$(SHELL) "$(top_srcdir)/scripts/git-version-gen.sh" -C "$(srcdir)" -c -o "$(distdir)/version.h.in"
+
+DISTHOOK_VERSION = \
+	$(SHELL) "$(top_srcdir)/scripts/git-version-gen.sh" -C "$(srcdir)" -v -o "$(distdir)/.version"
+
+endif
