@@ -35,11 +35,11 @@ fmt_isodate() {
   perl -MTime::Piece <<END 2>/dev/null ||
     print Time::Piece->strptime('$1', '%Y-%m-%d %H:%M:%S %z')->strftime('$2')
 END
-  # Failed.
+  # Failed. Just print the input.
   {
-    echo "$prog: error: failed to format datetime ($1)" >&2
+    echo "$prog: warning: failed to format datetime ($1)" >&2
     echo "$prog: info: GNU/BSD date not available?" >&2
-    false
+    echo "$1"
   }
 }
 
@@ -92,55 +92,87 @@ if [ -n "$next" ]; then
   exit 1
 fi
 
+git=git
+
 git_C() {
-  (cd "$refdir" && git "$@")
+  (cd "$refdir" && $git "$@")
 }
 
-# Extract the version number from the latest tag, e.g.,
-#   v1.0.0-xxx-yyy-zzz -> 1.0.0
-version_tag=`git_C describe --match 'v[0-9]*' --tags HEAD`
-version_tmp=`echo "$version_tag" | sed 's/^v//'`
-version_num=`echo "$version_tmp" | sed 's/-.*//'`
-
-version=$version_num
-
-# Support typical pre-release versions (e.g., v1.0.0-alpha-xxx-yyy-zzz) for
-#   -alpha, -alpha.1, -beta, -beta.1, -rc, -rc.1
-case $version_tmp in
-  *-alpha*|*-beta*|*-rc*)
-    version_tmp=`echo "$version_tmp" | sed 's/^[^-]*-//' | sed 's/-.*//'`
-    case $version_tmp in
-      alpha*|beta*|rc*)
-        version="$version-$version_tmp"
-        ;;
-    esac
-    ;;
-esac
-
-if [ "$mode" != "only-version" ]; then
-  # Get the revision identifier by git-describe.
-  revision=`git_C describe --tags --always --abbrev=7 HEAD`
-  # Check if the working tree is dirty.
-  git_C update-index -q --refresh
-  if git_C diff-index --quiet HEAD .; then
-    # If the working tree is not dirty, use the latest commit date.
-    isodate=`git_C log -1 --pretty=%ci .`
-    date=`LANG=C TZ=UTC fmt_isodate "$isodate" "$date_format"`
+# First, check if the repository is accessible.
+ok=false
+if type $git >/dev/null 2>/dev/null; then
+  if [ -d "$refdir" ]; then
+    if git_C rev-parse 2>/dev/null; then
+      ok=:
+    else
+      echo "$prog: warning: no repository found from $refdir" >&2
+    fi
   else
-    # If the working tree is dirty, suffix "-dirty" to the revision identifier
-    # and use the current date time.
-    revision="$revision-dirty"
-    date=`LANG=C TZ=UTC date +"$date_format"`
+    echo "$prog: warning: directory $refdir not found" >&2
   fi
-  # Extract MAJOR.MINOR.PATCH from the version number.
-  major_version=`expr "$version_num" : '\([0-9]\+\)' || :`
-  version_num=`expr "$version_num" : '[0-9]\+\.\?\(.*\)' || :`
-  minor_version=`expr "$version_num" : '\([0-9]\+\)' || :`
-  version_num=`expr "$version_num" : '[0-9]\+\.\?\(.*\)' || :`
-  patch_version=`expr "$version_num" : '\([0-9]\+\)' || :`
-  [ -z "$major_version" ] && major_version=0
-  [ -z "$minor_version" ] && minor_version=0
-  [ -z "$patch_version" ] && patch_version=0
+else
+  echo "$prog: warning: $git is not available" >&2
+fi
+
+if $ok; then
+  # Extract the version number from the latest tag, e.g.,
+  #   v1.0.0-xxx-yyy-zzz -> 1.0.0
+  version_tag=`git_C describe --match 'v[0-9]*' --tags --abbrev=7 HEAD || :`
+  # The above command may fail to find any tags and return an empty string.
+  [ -z "$version_tag" ] && version_tag='v0.0.0'
+  version_tmp=`echo "$version_tag" | sed 's/^v//'`
+  version_num=`echo "$version_tmp" | sed 's/-.*//'`
+
+  version=$version_num
+
+  # Support typical pre-release versions (e.g., v1.0.0-alpha-xxx-yyy-zzz) for
+  #   -alpha, -alpha.1, -beta, -beta.1, -rc, -rc.1
+  case $version_tmp in
+    *-alpha*|*-beta*|*-rc*)
+      version_tmp=`echo "$version_tmp" | sed 's/^[^-]*-//' | sed 's/-.*//'`
+      case $version_tmp in
+        alpha*|beta*|rc*)
+          version="$version-$version_tmp"
+          ;;
+      esac
+      ;;
+  esac
+
+  if [ "$mode" != "only-version" ]; then
+    # Get the revision identifier by git-describe.
+    revision=`git_C describe --match 'v[0-9]*' --tags --always --abbrev=7 HEAD`
+    # Check if the working tree is dirty.
+    git_C update-index -q --refresh || :
+    if git_C diff-index --quiet HEAD .; then
+      # If the working tree is not dirty, use the latest commit date.
+      isodate=`git_C log -1 --pretty=%ci .`
+      date=`LANG=C TZ=UTC fmt_isodate "$isodate" "$date_format"`
+    else
+      # If the working tree is dirty, suffix "-dirty" to the revision identifier
+      # and use the current date time.
+      revision="$revision-dirty"
+      date=`LANG=C TZ=UTC date +"$date_format"`
+    fi
+    # Extract MAJOR.MINOR.PATCH from the version number.
+    major_version=`expr "$version_num" : '\([0-9]\+\)' || :`
+    version_num=`expr "$version_num" : '[0-9]\+\.\?\(.*\)' || :`
+    minor_version=`expr "$version_num" : '\([0-9]\+\)' || :`
+    version_num=`expr "$version_num" : '[0-9]\+\.\?\(.*\)' || :`
+    patch_version=`expr "$version_num" : '\([0-9]\+\)' || :`
+    [ -z "$major_version" ] && major_version=0
+    [ -z "$minor_version" ] && minor_version=0
+    [ -z "$patch_version" ] && patch_version=0
+  fi
+else
+  # Failed to get any version information. Still output something.
+  version=0.0.0
+  if [ "$mode" != "only-version" ]; then
+    revision=unidentified
+    date=`LANG=C TZ=UTC date +"$date_format"`
+    major_version=0
+    minor_version=0
+    patch_version=0
+  fi
 fi
 
 print_versions() {
